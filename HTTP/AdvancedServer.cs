@@ -10,33 +10,79 @@ namespace HTTP
 {
     public abstract class AdvancedServer : BasicServer
     {
+        protected static Request Refine(BasicServer.Request Raw)
+        {
+            if(Raw is BasicServer.Request_With_Body)
+            {
+                
+            } else
+            {
+
+            }
+
+            return null;
+        }
+
+        new public class Request
+        {
+            public readonly HTTP.BasicServer.Request RawRequest;
+
+            public readonly IReadOnlyDictionary<string, string> RawHeaders;
+
+            public readonly Method Method;
+
+            public Request(HTTP.BasicServer.Request Raw)
+            {
+                this.RawRequest = Raw;
+                this.RawHeaders = Raw.Metadata.Headers;
+                this.Method = Raw.Method;
+            }
+        };
+
+        new public class Request_With_Body
+        {
+            public readonly HTTP.BasicServer.Request_With_Body RawRequest;
+
+            public readonly IReadOnlyDictionary<string, string> RawHeaders;
+
+            public readonly Method Method;
+
+            public readonly IReadOnlyCollection<byte> Body;
+
+            public Request_With_Body(HTTP.BasicServer.Request_With_Body Raw)
+            {
+                this.RawRequest = Raw;
+                this.RawHeaders = Raw.Metadata.Headers;
+                this.Method = Raw.Method;
+                this.Body = Raw.Body;
+            }
+        }
+
+
         public AdvancedServer(IPAddress IP, List<Method> AcceptedMethods) : base(IP, AcceptedMethods)
         {
 
         }
 
-        protected override void WriteResponse(Socket ClientSocket, Response Response)
-        {
-            var base_headers = Response.Headers;
+        public abstract BasicServer.Response Handle(Request Request);
 
-            if(!base_headers.ContainsKey("Content-Length"))
+        public override BasicServer.Response Handle(BasicServer.Request Request)
+        {
+            Request request;
+
+            try
             {
-                base_headers["Content-Length"] = Response.Body.Length.ToString();
+                request = Refine(Request);
+            } catch(Exception e)
+            {
+                ErrorLog(e.Message);
+                return RenderServerError(StatusCode.BAD_REQUEST);
             }
 
-            base.WriteResponse(ClientSocket, Response);
-        }
-
-        protected override Request ReadClientRequest(Socket ClientSocket)
-        {
-            var base_request = base.ReadClientRequest(ClientSocket);
-
-
-
-
-
+            return Handle(request);
 
         }
+        
 
 
     }

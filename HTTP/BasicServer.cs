@@ -19,6 +19,9 @@ namespace HTTP
 
         private readonly CancellationTokenSource CancellationTokenSource = new CancellationTokenSource();
 
+        public static bool Request_Has_Body(Method Method) => Method == Method.POST || Method == Method.PUT || Method == Method.DELETE || Method == Method.PATCH;
+        public static bool Response_Has_Body(Method Method) => Method == Method.GET || Method == Method.POST || Method == Method.DELETE || Method == Method.CONNECT || Method == Method.PATCH;
+
         public enum StatusType
         {
             STOPPED,
@@ -131,9 +134,11 @@ namespace HTTP
             }
 
             ListenSocket.Close();
+
+            ClientThreads.Remove(Thread.CurrentThread);
         }
 
-        protected virtual void WriteResponse(Socket ClientSocket, Response Response)
+        protected void WriteResponse(Socket ClientSocket, Request Request, Response Response)
         {
             ClientSocket.Send(Encoding.ASCII.GetBytes($"HTTP/1.1 {(int)Response.Status} {Response.Status.ToFriendlyString()}\r\n"));
             
@@ -144,7 +149,7 @@ namespace HTTP
 
             ClientSocket.Send(Encoding.ASCII.GetBytes("\r\n"));
 
-            ClientSocket.Send(Response.Body);
+            if(Request != null && Response.Body != null)  ClientSocket.Send(Response.Body);
 
             ClientSocket.Close();
         }
@@ -159,7 +164,7 @@ namespace HTTP
             public string Query;
         }
 
-        public abstract class Request
+        public class Request
         {
             public readonly Method Method;
             public readonly RequestMetadata Metadata;
@@ -171,83 +176,23 @@ namespace HTTP
             }
         }
 
-        public class GET_Request : Request
-        {
-            public GET_Request(RequestMetadata Metadata) : base(Method.GET, Metadata)
-            {
-            }
-        }
-
-        public class HEAD_Request : Request
-        {
-            public HEAD_Request(RequestMetadata Metadata) : base(Method.HEAD, Metadata)
-            {
-            }
-        }
-
-        public class POST_Request : Request
-        {
-            public readonly IReadOnlyCollection<byte> Body;
-
-            public POST_Request(byte[] Body, RequestMetadata Metadata) : base(Method.POST, Metadata)
-            {
-                this.Body = Body;
-            }
-        }
-
-        public class PUT_Request : Request
+        public class Request_With_Body : Request
         {
             public IReadOnlyCollection<byte> Body;
 
-            public PUT_Request(byte[] Body, RequestMetadata Metadata) : base(Method.PUT, Metadata)
+            public Request_With_Body(Method Method, RequestMetadata Metadata, byte[] Body) : base(Method, Metadata)
             {
+                if (! Request_Has_Body(Method))
+                {
+                    throw new ArgumentException();
+                }
+
                 this.Body = Body;
             }
+
         }
 
-        public class DELETE_Request : Request
-        {
-            public DELETE_Request(RequestMetadata Metadata) : base(Method.DELETE, Metadata)
-            {
-
-            }
-        }
-
-        public class TRACE_Request : Request
-        {
-            public TRACE_Request(RequestMetadata Metadata) : base(Method.TRACE, Metadata)
-            {
-
-            }
-        }
-
-        public class OPTIONS_Request : Request
-        {
-            public OPTIONS_Request(RequestMetadata Metadata) : base(Method.OPTIONS, Metadata)
-            {
-
-            }
-        }
-
-        public class CONNECT_Request : Request
-        {
-            public CONNECT_Request(RequestMetadata Metadata) : base(Method.CONNECT, Metadata)
-            {
-
-            }
-        }
-
-        public class PATCH_Request : Request
-        {
-            public IReadOnlyCollection<byte> Body;
-
-            public PATCH_Request(byte[] Body, RequestMetadata Metadata) : base(Method.PATCH, Metadata)
-            {
-                this.Body = Body;
-            }
-        }
-
-        protected virtual Request ReadClientRequest(Socket ClientSocket)
+        protected Request ReadClientRequest(Socket ClientSocket)
         {
             byte[] buf = new byte[1024 * 1024 * 512];
 
@@ -264,8 +209,7 @@ namespace HTTP
 
                 if (read < 0)
                 {
-                    /* TODO: handle */
-                    WriteResponse(ClientSocket, RenderServerError(StatusCode.BAD_REQUEST));
+                    WriteResponse(ClientSocket, null, RenderServerError(StatusCode.BAD_REQUEST));
                     throw new Exception("ClientSocket.Receive failed");
                 }
                 else
@@ -301,7 +245,7 @@ namespace HTTP
 
             if (!found_query)
             {
-                WriteResponse(ClientSocket, RenderServerError(StatusCode.BAD_REQUEST));
+                WriteResponse(ClientSocket, null, RenderServerError(StatusCode.BAD_REQUEST));
                 throw new Exception("Invalid HTTP query");
             }
             else
@@ -310,7 +254,7 @@ namespace HTTP
 
                 if (!match.Success)
                 {
-                    WriteResponse(ClientSocket, RenderServerError(StatusCode.BAD_REQUEST));
+                    WriteResponse(ClientSocket, null, RenderServerError(StatusCode.BAD_REQUEST));
                     throw new Exception("Invalid HTTP query");
                 }
                 else
@@ -321,12 +265,12 @@ namespace HTTP
 
                     if (!Enum.TryParse(method, out requested_method))
                     {
-                        WriteResponse(ClientSocket, RenderServerError(StatusCode.BAD_REQUEST));
+                        WriteResponse(ClientSocket, null, RenderServerError(StatusCode.BAD_REQUEST));
                         throw new Exception("Invalid HTTP method");
                     }
                     else if (!AcceptedMethods.Contains(requested_method))
                     {
-                        WriteResponse(ClientSocket, RenderServerError(StatusCode.BAD_REQUEST));
+                        WriteResponse(ClientSocket, null, RenderServerError(StatusCode.BAD_REQUEST));
                         throw new Exception("Invalid HTTP method");
                     }
                     else
@@ -386,7 +330,7 @@ namespace HTTP
                             {
                                 if (unread_bytes >= buf.Length)
                                 {
-                                    WriteResponse(ClientSocket, RenderServerError(StatusCode.BAD_REQUEST));
+                                    WriteResponse(ClientSocket, null, RenderServerError(StatusCode.BAD_REQUEST));
                                     throw new Exception("Header buffer overflow");
                                 }
                                 else
@@ -395,7 +339,7 @@ namespace HTTP
 
                                     if (read < 0)
                                     {
-                                        WriteResponse(ClientSocket, RenderServerError(StatusCode.BAD_REQUEST));
+                                        WriteResponse(ClientSocket, null, RenderServerError(StatusCode.BAD_REQUEST));
                                         throw new Exception("ClientSocket.Receive failed");
                                     }
                                 }
@@ -410,12 +354,12 @@ namespace HTTP
 
                             if (!match.Success)
                             {
-                                WriteResponse(ClientSocket, RenderServerError(StatusCode.BAD_REQUEST));
+                                WriteResponse(ClientSocket, null, RenderServerError(StatusCode.BAD_REQUEST));
                                 throw new Exception($"Invalid header: \"{header_str}\"");
                             }
                             else if (headers.ContainsKey(match.Groups["name"].Value))
                             {
-                                WriteResponse(ClientSocket, RenderServerError(StatusCode.BAD_REQUEST));
+                                WriteResponse(ClientSocket, null, RenderServerError(StatusCode.BAD_REQUEST));
                                 throw new Exception($"duplicate header: \"{header_str}\"");
                             }
                             else
@@ -425,9 +369,7 @@ namespace HTTP
                                 Console.WriteLine($"headers[{match.Groups["name"].Value}] = \"{match.Groups["value"].Value}\"");
                             }
                         }
-
-                        /* TODO: read body */
-
+                        
                         Request request;
 
                         var metadata = new RequestMetadata()
@@ -439,11 +381,11 @@ namespace HTTP
 
                         byte[] body = null;
 
-                        if (requested_method == Method.POST || requested_method == Method.PUT)
+                        if (Request_Has_Body(requested_method))
                         {
                             if (! headers.ContainsKey("Content-Length"))
                             {
-                                WriteResponse(ClientSocket, RenderServerError(StatusCode.BAD_REQUEST));
+                                WriteResponse(ClientSocket, null, RenderServerError(StatusCode.BAD_REQUEST));
                                 throw new Exception("Content-Length header missing");
                             }
 
@@ -451,7 +393,7 @@ namespace HTTP
 
                             if (!int.TryParse(headers["Content-Length"], out content_length))
                             {
-                                WriteResponse(ClientSocket, RenderServerError(StatusCode.BAD_REQUEST));
+                                WriteResponse(ClientSocket, null, RenderServerError(StatusCode.BAD_REQUEST));
                                 throw new Exception($"Invalid Content-Length: {metadata.Headers["Content-Length"]}");
                             }
                             else
@@ -468,54 +410,20 @@ namespace HTTP
 
                                     if (read < 0)
                                     {
-                                        WriteResponse(ClientSocket, RenderServerError(StatusCode.BAD_REQUEST));
+                                        WriteResponse(ClientSocket, null, RenderServerError(StatusCode.BAD_REQUEST));
                                         throw new Exception("ClientSocket.Receive failed");
                                     }
                                 }
                             }
                         }
 
-                        switch (requested_method)
+                        if (body != null && Request_Has_Body(requested_method))
                         {
-                            case Method.CONNECT:
-
-                                request = new CONNECT_Request(metadata);
-                                break;
-
-                            case Method.DELETE:
-                                request = new DELETE_Request(metadata);
-                                break;
-
-                            case Method.GET:
-                                request = new GET_Request(metadata);
-                                break;
-
-                            case Method.HEAD:
-                                request = new HEAD_Request(metadata);
-                                break;
-
-                            case Method.OPTIONS:
-                                request = new OPTIONS_Request(metadata);
-                                break;
-
-                            case Method.PATCH:
-                                request = new PATCH_Request(body, metadata);
-                                break;
-
-                            case Method.POST:
-                                request = new POST_Request(body, metadata);
-                                break;
-
-                            case Method.PUT:
-                                request = new PUT_Request(body, metadata);
-                                break;
-
-                            case Method.TRACE:
-                                request = new TRACE_Request(metadata);
-                                break;
-
-                            default:
-                                throw new InvalidOperationException();
+                            request = new Request_With_Body(requested_method, metadata, body);
+                        }
+                        else
+                        {
+                            request = new Request(requested_method, metadata);
                         }
 
                         AccessLog(request);
@@ -526,8 +434,7 @@ namespace HTTP
             }
         }
 
-
-        private void HandleClientSocket(Socket ClientSocket)
+        protected void HandleClientSocket(Socket ClientSocket)
         {
             bool have_error = false;
 
@@ -556,10 +463,8 @@ namespace HTTP
                         response = RenderServerError(StatusCode.INTERNAL_SERVER_ERROR);
                     }
 
-                WriteResponse(ClientSocket, response);
+                WriteResponse(ClientSocket, request, response);
             }
-
-            ClientThreads.Remove(Thread.CurrentThread);
         }
 
         public void Start(ushort Port)
@@ -604,6 +509,12 @@ namespace HTTP
                 try
                 {
                     ListenSocket.Close();
+                    
+                    foreach(var thread in ClientThreads.Where(thread => thread.IsAlive))
+                    {
+                        thread.Abort();
+                    }
+
                     Status = StatusType.STOPPED;
                 }
                 catch (Exception)
