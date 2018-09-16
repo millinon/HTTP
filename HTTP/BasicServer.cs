@@ -19,7 +19,8 @@ namespace HTTP
 
         private readonly CancellationTokenSource CancellationTokenSource = new CancellationTokenSource();
 
-        public static bool Request_Has_Body(Method Method) => Method == Method.POST || Method == Method.PUT || Method == Method.DELETE || Method == Method.PATCH;
+        public static bool Request_Must_Have_Body(Method Method) => Method == Method.POST || Method == Method.PUT || Method == Method.PATCH;
+        public static bool Request_May_Have_Body(Method Method) => Request_Must_Have_Body(Method) || Method == Method.DELETE;
         public static bool Response_Has_Body(Method Method) => Method == Method.GET || Method == Method.POST || Method == Method.DELETE || Method == Method.CONNECT || Method == Method.PATCH;
 
         public enum StatusType
@@ -82,7 +83,7 @@ namespace HTTP
         public abstract void AccessLog(Request Request);
         public abstract void ErrorLog(string Message);
 
-        public BasicServer(IPAddress IP, List<Method> AcceptedMethods)
+        public BasicServer(IPAddress IP, IEnumerable<Method> AcceptedMethods)
         {
             SERVER_IP = IP;
 
@@ -182,14 +183,13 @@ namespace HTTP
 
             public Request_With_Body(Method Method, RequestMetadata Metadata, byte[] Body) : base(Method, Metadata)
             {
-                if (! Request_Has_Body(Method))
+                if (! Request_May_Have_Body(Method))
                 {
                     throw new ArgumentException();
                 }
 
                 this.Body = Body;
             }
-
         }
 
         protected Request ReadClientRequest(Socket ClientSocket)
@@ -202,6 +202,7 @@ namespace HTTP
             bool found_query = false;
             byte[] query_buf = null;
             int headers_start_pos = 0;
+            string query_string = null;
 
             while (total_read < buf.Length && !found_query)
             {
@@ -260,6 +261,7 @@ namespace HTTP
                 else
                 {
                     var method = match.Groups["method"].Value;
+                    query_string = match.Groups["query_string"].Value;
 
                     Method requested_method;
 
@@ -375,13 +377,13 @@ namespace HTTP
                         var metadata = new RequestMetadata()
                         {
                             ClientIP = (ClientSocket.RemoteEndPoint as IPEndPoint).Address,
-                            Query = match.Groups["query_string"].Value,
+                            Query = query_string,
                             Headers = headers,
                         };
 
                         byte[] body = null;
 
-                        if (Request_Has_Body(requested_method))
+                        if (Request_Must_Have_Body(requested_method))
                         {
                             if (! headers.ContainsKey("Content-Length"))
                             {
@@ -417,7 +419,7 @@ namespace HTTP
                             }
                         }
 
-                        if (body != null && Request_Has_Body(requested_method))
+                        if (body != null && Request_Must_Have_Body(requested_method))
                         {
                             request = new Request_With_Body(requested_method, metadata, body);
                         }
