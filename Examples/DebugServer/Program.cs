@@ -17,7 +17,7 @@ namespace DebugServer
             {
                 Status = StatusCode.OK,
                 Headers = DefaultHeaders(),
-                Body = Encoding.ASCII.GetBytes($"{Request.Method} path: {Request.Query.Path} params: [{string.Join(",", Request.Query.Params.Select(kv => $"{kv.Key} => {kv.Value}"))}] headers: [{string.Join(",", Request.RawHeaders.Select(kv => $"{kv.Key} => {kv.Value}"))}]"),
+                Body = Encoding.ASCII.GetBytes($"{Request.Method} path: {Request.Query.Path} params: [{string.Join(",", Request.Query.Params.Select(kv => $"{kv.Key} => {kv.Value}"))}] UA: {(Request.Headers.User_Agent.HasValue ? Request.Headers.User_Agent.Value : "(none)")}"),
             };
         }
 

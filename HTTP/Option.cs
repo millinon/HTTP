@@ -1,4 +1,6 @@
-﻿namespace HTTP
+﻿using System;
+
+namespace HTTP
 {
     public class Option<T>
     {
@@ -20,5 +22,16 @@
 
         public static Option<T> Some(T Value) => new Option<T>(Value);
         public static Option<T> None() => new Option<T>();
+
+        public static implicit operator Option<T>(T Value)
+        {
+            return new Option<T>(Value);
+        }
+
+        public static explicit operator T(Option<T> Option)
+        {
+            if (Option.HasValue) return Option.Value;
+            else throw new InvalidOperationException("Attempted to read empty value");
+        }
     }
 }

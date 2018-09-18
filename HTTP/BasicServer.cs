@@ -139,7 +139,7 @@ namespace HTTP
             ClientThreads.Remove(Thread.CurrentThread);
         }
 
-        protected void WriteResponse(Socket ClientSocket, Request Request, Response Response)
+        protected virtual void WriteResponse(Socket ClientSocket, Request Request, Response Response)
         {
             ClientSocket.Send(Encoding.ASCII.GetBytes($"HTTP/1.1 {(int)Response.Status} {Response.Status.ToFriendlyString()}\r\n"));
             
