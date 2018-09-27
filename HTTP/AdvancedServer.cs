@@ -225,11 +225,85 @@ namespace HTTP
             }
         };
 
+
+        public enum BodyType
+        {
+            Raw,
+            URL_Encoded,
+            FormData_Encoded
+        }
+
+        public class RequestBody
+        {
+            public readonly BodyType Type;
+
+            public readonly IReadOnlyCollection<byte> Raw;
+
+            protected RequestBody(BodyType Type, byte[] Raw)
+            {
+                this.Type = Type;
+                this.Raw = Raw;
+            }
+
+            public RequestBody(byte[] Raw)
+            {
+                this.Type = BodyType.Raw;
+                this.Raw = Raw;
+            }
+        }
+
+        public class RequestBody_URLEncoded : RequestBody
+        {
+            public readonly IReadOnlyDictionary<string, string> Params;
+
+            public RequestBody_URLEncoded(byte[] Raw) : base(BodyType.URL_Encoded, Raw)
+            {
+                var dict = new Dictionary<string, string>();
+
+                foreach(var pair in Encoding.UTF8.GetString(Raw).Split('&'))
+                {
+                    var idx = pair.IndexOf('=');
+
+                    var key = pair.Substring(0, idx);
+                    if (dict.ContainsKey(key)) throw new ArgumentException();
+
+                    var value = Uri.UnescapeDataString(pair.Substring(idx + 1));
+
+                    dict[key] = value;
+                }
+
+                Params = dict;
+            }
+        }
+
+        public class RequestBody_FormDataEncoded : RequestBody
+        {
+            public RequestBody_FormDataEncoded(byte[] Raw) : base(BodyType.FormData_Encoded, Raw)
+            {
+                throw new NotImplementedException();
+            }
+        }
+
         new public class Request_With_Body : Request
         {
-            public readonly IReadOnlyCollection<byte> Body;
+            public readonly RequestBody Body;
 
-            public Request_With_Body(BasicServer.Request_With_Body Raw, StandardRequestHeaders Headers) : base(Raw, Headers) => this.Body = Raw.Body;
+            public Request_With_Body(BasicServer.Request_With_Body Raw, StandardRequestHeaders Headers) : base(Raw, Headers)
+            {
+                if (Headers.Content_Type.HasValue)
+                {
+                    if (Headers.Content_Type.Value.Equals("application/x-www-form-urlencoded"))
+                    {
+                        Body = new RequestBody_URLEncoded(Raw.Body);
+                    }
+                    else if (Headers.Content_Type.Value.Equals("multipart/form-data"))
+                    {
+                        Body = new RequestBody_FormDataEncoded(Raw.Body);
+                    }
+                    else Body = new RequestBody(Raw.Body);
+                }
+                else Body = new RequestBody(Raw.Body);
+            }
         }
 
         public AdvancedServer(IPAddress IP, IEnumerable<Method> AcceptedMethods) : base(IP, AcceptedMethods)

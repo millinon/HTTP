@@ -179,7 +179,7 @@ namespace HTTP
 
         public class Request_With_Body : Request
         {
-            public IReadOnlyCollection<byte> Body;
+            public byte[] Body;
 
             public Request_With_Body(Method Method, RequestMetadata Metadata, byte[] Body) : base(Method, Metadata)
             {
