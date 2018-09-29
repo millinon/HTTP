@@ -367,8 +367,6 @@ namespace HTTP
                             else
                             {
                                 headers[match.Groups["name"].Value] = match.Groups["value"].Value;
-
-                                Console.WriteLine($"headers[{match.Groups["name"].Value}] = \"{match.Groups["value"].Value}\"");
                             }
                         }
                         

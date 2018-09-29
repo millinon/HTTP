@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -14,7 +16,7 @@ namespace HTTP
         {
             var dict = new Dictionary<string, string>();
 
-            foreach(var pair in ParamsStr.Split('&'))
+            foreach (var pair in ParamsStr.Split('&'))
             {
                 var idx = pair.IndexOf('=');
 
@@ -31,8 +33,8 @@ namespace HTTP
 
         public struct QType<T>
         {
-            T Value;
-            Option<float> Quality;
+            public T Value;
+            public float Quality;
         }
 
         public struct StandardRequestHeaders
@@ -74,45 +76,57 @@ namespace HTTP
             public Option<string> Warning;
         }
 
+        public static List<QType<T>> ParseQType<T>(String Str, Func<string, T> ParseFunc)
+        {
+            var ret = new List<QType<T>>();
+
+            foreach (var tok in Str.Split(','))
+            {
+                if (tok.Contains(";q="))
+                {
+                    var idx = tok.IndexOf(";q=");
+
+                    ret.Add(new QType<T>()
+                    {
+                        Value = ParseFunc(tok.Substring(0, idx)),
+                        Quality = float.Parse(tok.Substring(idx + 3)),
+                    });
+                }
+                else
+                {
+                    ret.Add(new QType<T>()
+                    {
+                        Value = ParseFunc(tok),
+                        Quality = 1.0F,
+                    });
+                }
+            }
+            return ret;
+        }
+
         public static List<QType<ContentType>> ParseAccept(string Accept)
         {
-            var ret = new List<QType<ContentType>>();
-
-            /* TODO */
-
-            return ret;
+            return ParseQType(Accept, ContentType.Parse);
         }
 
         public static List<QType<string>> ParseAcceptCharset(string Accept_Charset)
         {
-            var ret = new List<QType<string>>();
-
-            /* TODO */
-
-            return ret;
+            return ParseQType(Accept_Charset, s => s);
         }
 
         public static List<QType<string>> ParseAcceptEncoding(string Accept_Encoding)
         {
-            var ret = new List<QType<string>>();
-
-            /* TODO */
-
-            return ret;
+            return ParseQType(Accept_Encoding, s => s);
         }
 
         public static List<QType<string>> ParseAcceptLanguage(string Accept_Language)
         {
-            var ret = new List<QType<string>>();
-
-            /* TODO */
-
-            return ret;
+            return ParseQType(Accept_Language, s => s);
         }
 
         public static DateTime ParseDate(string Date)
         {
-            return default(DateTime);
+            return DateTime.Parse(Date);
         }
 
         public static StandardRequestHeaders ParseRequestHeaders(IReadOnlyDictionary<string, string> RawHeaders)
@@ -174,10 +188,11 @@ namespace HTTP
 
         protected static Request Refine(BasicServer.Request Raw)
         {
-            if(Raw is BasicServer.Request_With_Body)
+            if (Raw is BasicServer.Request_With_Body)
             {
                 return new Request_With_Body(Raw as BasicServer.Request_With_Body, ParseRequestHeaders(Raw.Metadata.Headers));
-            } else
+            }
+            else
             {
                 return new Request(Raw, ParseRequestHeaders(Raw.Metadata.Headers));
             }
@@ -196,7 +211,8 @@ namespace HTTP
 
                     Path = Query.Substring(0, idx);
                     Params = ParseParams(Query.Substring(idx + 1));
-                } else
+                }
+                else
                 {
                     Path = Query;
                     Params = new Dictionary<string, string>();
@@ -260,7 +276,7 @@ namespace HTTP
             {
                 var dict = new Dictionary<string, string>();
 
-                foreach(var pair in Encoding.UTF8.GetString(Raw).Split('&'))
+                foreach (var pair in Encoding.UTF8.GetString(Raw).Split('&'))
                 {
                     var idx = pair.IndexOf('=');
 
@@ -336,7 +352,8 @@ namespace HTTP
             try
             {
                 request = Refine(Request);
-            } catch(Exception e)
+            }
+            catch (Exception e)
             {
                 ErrorLog(e.Message);
                 return RenderServerError(StatusCode.BAD_REQUEST);
@@ -344,49 +361,103 @@ namespace HTTP
 
             Response response;
 
-            switch (request.Method)
+            try
             {
-                case Method.GET:
-                    response = Handle_GET(request);
-                    break;
-                case Method.HEAD:
-                    response = Handle_HEAD(request);
-                    break;
-                case Method.POST:
-                    response = Handle_POST(request as Request_With_Body);
-                    break;
-                case Method.PUT:
-                    response = Handle_PUT(request as Request_With_Body);
-                    break;
-                case Method.DELETE:
-                    response = Handle_DELETE(request);
-                    break;
-                case Method.TRACE:
-                    response = Handle_TRACE(request);
-                    break;
-                case Method.OPTIONS:
-                    response = Handle_OPTIONS(request);
-                    break;
-                case Method.CONNECT:
-                    response = Handle_CONNECT(request);
-                    break;
-                case Method.PATCH:
-                    response = Handle_PATCH(request as Request_With_Body);
-                    break;
-                default:
-                    response = RenderServerError(StatusCode.BAD_REQUEST);
-                    break;
+                switch (request.Method)
+                {
+                    case Method.GET:
+                        response = Handle_GET(request);
+                        break;
+                    case Method.HEAD:
+                        response = Handle_HEAD(request);
+                        break;
+                    case Method.POST:
+                        response = Handle_POST(request as Request_With_Body);
+                        break;
+                    case Method.PUT:
+                        response = Handle_PUT(request as Request_With_Body);
+                        break;
+                    case Method.DELETE:
+                        response = Handle_DELETE(request);
+                        break;
+                    case Method.TRACE:
+                        response = Handle_TRACE(request);
+                        break;
+                    case Method.OPTIONS:
+                        response = Handle_OPTIONS(request);
+                        break;
+                    case Method.CONNECT:
+                        response = Handle_CONNECT(request);
+                        break;
+                    case Method.PATCH:
+                        response = Handle_PATCH(request as Request_With_Body);
+                        break;
+                    default:
+                        response = RenderServerError(StatusCode.BAD_REQUEST);
+                        break;
+                }
+
+            } catch(Exception e)
+            {
+                response = RenderServerError(StatusCode.INTERNAL_SERVER_ERROR);
             }
 
-            return response; 
+            if (response.Body != null && !response.Headers.ContainsKey("Content-Encoding"))
+            {
+                if (request.Headers.Accept_Encoding.HasValue)
+                {
+                    foreach (var encoding in request.Headers.Accept_Encoding.Value.OrderBy(encoding => -encoding.Quality).Select(qval => qval.Value))
+                    {
+                        switch (encoding)
+                        {
+                            case "gzip":
+                                using (var compressed = new MemoryStream())
+                                {
+                                    using (var gzip = new GZipStream(compressed, CompressionMode.Compress))
+                                    {
+                                        gzip.Write(response.Body, 0, response.Body.Length);
+                                    }
+
+                                    response.Body = compressed.ToArray();
+                                    response.Headers["Content-Length"] = response.Body.Length.ToString();
+                                    response.Headers["Content-Encoding"] = "gzip";
+                                }
+                                break;
+
+                            case "deflate":
+                                using (var compressed = new MemoryStream())
+                                {
+                                    using (var deflate = new DeflateStream(compressed, CompressionMode.Compress))
+                                    {
+                                        deflate.Write(response.Body, 0, response.Body.Length);
+                                    }
+
+                                    response.Body = compressed.ToArray();
+                                    response.Headers["Content-Length"] = response.Body.Length.ToString();
+                                    response.Headers["Content-Encoding"] = "deflate";
+                                }
+                                break;
+
+                            case "identity":
+                                response.Headers["Content-Length"] = response.Body.Length.ToString();
+                                response.Headers["Content-Encoding"] = "identity";
+                                break;
+                        }
+
+                        if (response.Headers.ContainsKey("Content-Encoding")) break;
+                    }
+                }
+            }
+
+            return response;
         }
 
         protected override void WriteResponse(Socket ClientSocket, BasicServer.Request Request, Response Response)
         {
 
-            if(Response.Body != null && Response_Has_Body(Request.Method))
+            if (Response.Body != null && Response_Has_Body(Request.Method))
             {
-                if (! Response.Headers.ContainsKey("Content-Length"))
+                if (!Response.Headers.ContainsKey("Content-Length"))
                 {
                     Response.Headers["Content-Length"] = Response.Body.Length.ToString();
                 }
