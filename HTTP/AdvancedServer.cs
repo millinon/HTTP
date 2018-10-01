@@ -322,7 +322,7 @@ namespace HTTP
             }
         }
 
-        public AdvancedServer(IPAddress IP, IEnumerable<Method> AcceptedMethods) : base(IP, AcceptedMethods)
+        public AdvancedServer(IPEndPoint Endpoint, IEnumerable<Method> AcceptedMethods) : base(Endpoint, AcceptedMethods)
         {
 
         }

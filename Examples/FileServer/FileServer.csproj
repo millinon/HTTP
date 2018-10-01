@@ -34,6 +34,7 @@
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <Reference Include="System.Web" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
     <Reference Include="Microsoft.CSharp" />
@@ -49,7 +50,7 @@
     <None Include="App.config" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\HTTP\HTTP.csproj">
+    <ProjectReference Include="..\..\HTTP\HTTP.csproj">
       <Project>{8b2f955a-8b27-4463-bad9-49d10cf6532b}</Project>
       <Name>HTTP</Name>
     </ProjectReference>

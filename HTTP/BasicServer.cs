@@ -12,9 +12,10 @@ namespace HTTP
 {
     public abstract class BasicServer : IDisposable
     {
-        private Socket ListenSocket;
-
-        public readonly IPAddress SERVER_IP;
+        private readonly TcpListener Listener;
+        private Thread Listener_Thread;
+        //private Socket ListenSocket;
+        
         public readonly IReadOnlyCollection<Method> AcceptedMethods;
 
         private readonly CancellationTokenSource CancellationTokenSource = new CancellationTokenSource();
@@ -83,10 +84,8 @@ namespace HTTP
         public abstract void AccessLog(Request Request);
         public abstract void ErrorLog(string Message);
 
-        public BasicServer(IPAddress IP, IEnumerable<Method> AcceptedMethods)
+        public BasicServer(IPEndPoint Endpoint, IEnumerable<Method> AcceptedMethods)
         {
-            SERVER_IP = IP;
-
             this.AcceptedMethods = (IReadOnlyCollection<Method>)new HashSet<Method>(AcceptedMethods);
 
             if (!this.AcceptedMethods.Contains(Method.GET) || !this.AcceptedMethods.Contains(Method.HEAD))
@@ -94,19 +93,21 @@ namespace HTTP
                 throw new ArgumentException("HTTP server must implement GET and HEAD at a minimum");
             }
 
+            Listener = new TcpListener(Endpoint);
+
             Status = StatusType.STOPPED;
         }
 
         private readonly object _clientThreadsLock = new object();
         private readonly HashSet<Thread> ClientThreads = new HashSet<Thread>();
 
-        private void HandleListeningSocket(Socket ListenSocket, CancellationToken CancelToken)
+        private void HandleListeningSocket(CancellationToken CancelToken)
         {
             while (!CancelToken.IsCancellationRequested)
             {
                 try
                 {
-                    var client_sock = ListenSocket.Accept();
+                    var client_sock = Listener.AcceptSocket();
 
                     var thread = new Thread(() => HandleClientSocket(client_sock));
                     ClientThreads.Add(thread);
@@ -127,16 +128,15 @@ namespace HTTP
                             }
                         }
 
-                        try { ListenSocket.Close(); } catch (Exception) { };
+                        try {
+                            Listener.Stop();
+                            Status = StatusType.ERROR;
+                        } catch (Exception) { };
 
                         return;
                     }
                 }
             }
-
-            ListenSocket.Close();
-
-            ClientThreads.Remove(Thread.CurrentThread);
         }
 
         protected virtual void WriteResponse(Socket ClientSocket, Request Request, Response Response)
@@ -467,7 +467,7 @@ namespace HTTP
             }
         }
 
-        public void Start(ushort Port)
+        public void Start()
         {
             lock (_statusLock)
             {
@@ -478,14 +478,13 @@ namespace HTTP
 
                 try
                 {
-                    ListenSocket = new Socket(SocketType.Stream, ProtocolType.Tcp);
-                    var endpoint = new IPEndPoint(SERVER_IP, Port);
-                    ListenSocket.Bind(endpoint);
-                    ListenSocket.Listen(1024);
+                    Listener.Start();
 
-                    var listen_thread = new Thread(() => HandleListeningSocket(ListenSocket, CancellationTokenSource.Token));
+                    Listener_Thread = new Thread(() => HandleListeningSocket(CancellationTokenSource.Token));
 
-                    listen_thread.Start();
+                    //var listen_thread = new Thread(() => HandleListeningSocket(CancellationTokenSource.Token));
+
+                    Listener_Thread.Start();
 
                     Status = StatusType.RUNNING;
                 }
@@ -508,8 +507,10 @@ namespace HTTP
 
                 try
                 {
-                    ListenSocket.Close();
-                    
+                    Listener.Stop();
+
+                    Listener_Thread.Abort();
+
                     foreach(var thread in ClientThreads.Where(thread => thread.IsAlive))
                     {
                         thread.Abort();

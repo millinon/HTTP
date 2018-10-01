@@ -6,6 +6,8 @@ using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 
+using System.Web.UI;
+
 using HTTP;
 
 namespace FileServer
@@ -16,7 +18,7 @@ namespace FileServer
         {
             using (var server = new FileServer(Path.Combine(Directory.GetCurrentDirectory(), "www")))
             {
-                server.Start(8080);
+                server.Start();
 
                 Console.WriteLine("Press Enter to end the program...");
 
@@ -26,7 +28,7 @@ namespace FileServer
 
         private string base_dir;
 
-    public FileServer(string base_dir) : base(IPAddress.Parse("127.0.0.1"), new Method[] { Method.GET, Method.HEAD })
+    public FileServer(string base_dir) : base(new IPEndPoint(IPAddress.Parse("0.0.0.0"), 8080), new Method[] { Method.GET, Method.HEAD })
         {
             this.base_dir = base_dir;
             Console.WriteLine($"serving files in {base_dir}...");
@@ -54,7 +56,7 @@ namespace FileServer
                 {
                     if (path_stack.Count() == 0) throw new Exception("shenanigans detected");
                     else path_stack.Pop();
-                } else
+                } else if(tok != ".")
                 {
                     path_stack.Push(tok);
                 }
@@ -66,11 +68,133 @@ namespace FileServer
         private bool is_dir(string sanitized_path) => Directory.Exists(sanitized_path);
         private bool is_file(string sanitized_path) => File.Exists(sanitized_path);
 
-        private Response ListDirectory(string Path)
+        private string mk_html(string Title, Action<HtmlTextWriter> RenderBody)
         {
-           return RenderServerError(StatusCode.UNAUTHORIZED);
+            using (var str_writer = new StringWriter())
+            {
+                using (var html_writer = new HtmlTextWriter(str_writer))
+                {
+                    html_writer.RenderBeginTag(HtmlTextWriterTag.Html);
+
+                    html_writer.RenderBeginTag(HtmlTextWriterTag.Head);
+
+                    html_writer.AddAttribute("charset", "UTF-8");
+                    html_writer.RenderBeginTag(HtmlTextWriterTag.Meta);
+                    html_writer.RenderEndTag();
+
+                    html_writer.RenderBeginTag(HtmlTextWriterTag.Title);
+                    html_writer.Write(Title);
+                    html_writer.RenderEndTag();
+
+                    html_writer.RenderEndTag();
+
+                    html_writer.RenderBeginTag(HtmlTextWriterTag.Body);
+                    RenderBody(html_writer);
+                    html_writer.RenderEndTag();
+
+                    html_writer.RenderBeginTag(HtmlTextWriterTag.Hr);
+                    html_writer.RenderEndTag();
+
+                    html_writer.RenderBeginTag("footer");
+                    html_writer.Write($"Millinon's HTTP Server ({Environment.OSVersion.Platform})");
+                    html_writer.RenderEndTag();
+
+                    html_writer.RenderEndTag();
+                }
+
+                return str_writer.ToString();
+            }
         }
-        
+
+        private Response ListDirectory(string Query_Path, string Sanitized_Directory_Path)
+        {
+
+            void render_body(HtmlTextWriter html_writer)
+            {
+                html_writer.RenderBeginTag(HtmlTextWriterTag.H1);
+                html_writer.Write($"Index of directory {Query_Path}");
+                html_writer.RenderEndTag();
+
+                html_writer.RenderBeginTag(HtmlTextWriterTag.Hr);
+                html_writer.RenderEndTag();
+
+                html_writer.RenderBeginTag(HtmlTextWriterTag.Ul);
+
+                if (Query_Path != "/")
+                {
+                    var toks = Query_Path.TrimEnd('/').Split('/');
+                    var path = string.Join("/", toks.Take(toks.Count() - 1)).TrimEnd('/');
+
+                    html_writer.RenderBeginTag(HtmlTextWriterTag.Ul);
+
+                    html_writer.AddAttribute(HtmlTextWriterAttribute.Href, $"{path}/");
+                    html_writer.RenderBeginTag(HtmlTextWriterTag.A);
+                    html_writer.Write("..");
+                    html_writer.RenderEndTag();
+
+                    html_writer.RenderEndTag();
+                }
+
+                var dirinfo = new DirectoryInfo(Sanitized_Directory_Path);
+                
+                foreach(var dir in dirinfo.GetDirectories().Select(subdir => subdir.Name))
+                {
+                    html_writer.RenderBeginTag(HtmlTextWriterTag.Ul);
+
+                    html_writer.AddAttribute(HtmlTextWriterAttribute.Href, $"{Query_Path}{dir}/");
+                    html_writer.RenderBeginTag(HtmlTextWriterTag.A);
+                    html_writer.Write($"{dir}/");
+                    html_writer.RenderEndTag();
+
+                    html_writer.RenderEndTag();
+                }
+
+                foreach(var file in dirinfo.GetFiles().Select(file => file.Name))
+                {
+                    html_writer.RenderBeginTag(HtmlTextWriterTag.Ul);
+
+                    html_writer.AddAttribute(HtmlTextWriterAttribute.Href, $"{Query_Path}{file}");
+                    html_writer.RenderBeginTag(HtmlTextWriterTag.A);
+                    html_writer.Write(file);
+                    html_writer.RenderEndTag();
+
+                    html_writer.RenderEndTag();
+                }
+
+                html_writer.RenderEndTag();
+            }
+
+            var headers = DefaultHeaders();
+            headers["Content-Type"] = "text/html; charset=utf-8";
+
+            return new Response()
+            {
+                Status = StatusCode.OK,
+                Headers = headers,
+                Body = Encoding.UTF8.GetBytes(mk_html(Query_Path, render_body))
+            };
+        }
+
+        public override Response RenderServerError(StatusCode Status)
+        {
+            void render_body(HtmlTextWriter html_writer)
+            {
+                html_writer.RenderBeginTag(HtmlTextWriterTag.H1);
+                html_writer.Write($"{(int) Status} {Status.ToFriendlyString()}");
+                html_writer.RenderEndTag();
+            }
+
+            var headers = DefaultHeaders();
+            headers["Content-Type"] = "text/html; charset=utf-8";
+
+            return new Response()
+            {
+                Status = Status,
+                Headers = headers,
+                Body = Encoding.UTF8.GetBytes(mk_html($"{(int)Status}", render_body)),
+            };
+        }
+
         public override Response Handle_GET(Request Request)
         {
             var sanitized_path = sanitize_path(Request.Query.Path);
@@ -117,7 +241,7 @@ namespace FileServer
                     };
                 } else
                 {
-                    return ListDirectory(sanitized_path);
+                    return ListDirectory(Request.Query.Path, sanitized_path);
                 }
             }
             else return RenderServerError(StatusCode.NOT_FOUND);
@@ -127,22 +251,10 @@ namespace FileServer
         {
             var get_response = Handle_GET(Request);
 
-            var headers = DefaultHeaders();
-
-            if (get_response.Headers.ContainsKey("Content-Type"))
-            {
-                headers["Content-Type"] = get_response.Headers["Content-Type"];
-            }
-
-            if (get_response.Headers.ContainsKey("Content-Length"))
-            {
-                headers["Content-Length"] = get_response.Headers["Content-Length"];
-            }
-
             return new Response()
             {
                 Status = get_response.Status,
-                Headers = headers,
+                Headers = get_response.Headers,
             };
         }
     }

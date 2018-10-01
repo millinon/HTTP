@@ -11,7 +11,7 @@ namespace DebugServer
 {
     class HelloWorldServer : BasicServer
     {
-        public HelloWorldServer() : base(IPAddress.Parse("0.0.0.0"), new List<Method>() { Method.GET, Method.HEAD })
+        public HelloWorldServer() : base(new IPEndPoint(IPAddress.Parse("0.0.0.0"), 8080), new List<Method>() { Method.GET, Method.HEAD })
         {
 
         }
@@ -43,7 +43,7 @@ namespace DebugServer
         {
             using (var server = new HelloWorldServer())
             {
-                server.Start(8080);
+                server.Start();
 
                 Console.WriteLine("Press Enter to end the program...");
 

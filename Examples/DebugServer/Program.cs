@@ -21,7 +21,7 @@ namespace DebugServer
             };
         }
 
-        public DebugServer() : base(IPAddress.Parse("0.0.0.0"), (Method[]) Enum.GetValues(typeof(Method)))
+        public DebugServer() : base(new IPEndPoint(IPAddress.Parse("0.0.0.0"), 8080), (Method[]) Enum.GetValues(typeof(Method)))
         {
 
         }
@@ -62,7 +62,7 @@ namespace DebugServer
         {
             using (var server = new DebugServer())
             {
-                server.Start(8080);
+                server.Start();
 
                 Console.WriteLine("Press Enter to end the program...");
 
