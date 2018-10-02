@@ -84,6 +84,8 @@ namespace HTTP
         public abstract void AccessLog(Request Request);
         public abstract void ErrorLog(string Message);
 
+        public virtual void ErrorLog(Exception Exception) => ErrorLog(Exception.Message);
+
         public BasicServer(IPEndPoint Endpoint, IEnumerable<Method> AcceptedMethods)
         {
             this.AcceptedMethods = (IReadOnlyCollection<Method>)new HashSet<Method>(AcceptedMethods);
@@ -114,8 +116,10 @@ namespace HTTP
 
                     thread.Start();
                 }
-                catch (Exception)
+                catch (Exception e)
                 {
+                    ErrorLog(e);
+
                     lock (_statusLock)
                     {
                         Status = StatusType.ERROR;
@@ -141,8 +145,12 @@ namespace HTTP
 
         protected virtual void WriteResponse(Socket ClientSocket, Request Request, Response Response)
         {
-            ClientSocket.Send(Encoding.ASCII.GetBytes($"HTTP/1.1 {(int)Response.Status} {Response.Status.ToFriendlyString()}\r\n"));
+            if (ClientSocket == null) throw new ArgumentException("ClientSocket null");
             
+            ClientSocket.Send(Encoding.ASCII.GetBytes($"HTTP/1.1 {(int)Response.Status} {Response.Status.ToFriendlyString()}\r\n"));
+
+            if (Response.Headers == null) throw new ArgumentException("headers missing");
+
             foreach(var header in Response.Headers)
             {
                 ClientSocket.Send(Encoding.ASCII.GetBytes($"{header.Key}: {header.Value}\r\n"));
@@ -150,12 +158,12 @@ namespace HTTP
 
             ClientSocket.Send(Encoding.ASCII.GetBytes("\r\n"));
 
-            if(Request != null && Response.Body != null)  ClientSocket.Send(Response.Body);
+            if(Response.Body != null)  ClientSocket.Send(Response.Body);
 
             ClientSocket.Close();
         }
 
-        private readonly Regex RequestRegex = new Regex("^(?<method>GET|HEAD|POST|PUT|DELETE|TRACE|OPTIONS|CONNECT|PATCH)\\s(?<query_string>[^\\s]+)\\sHTTP/1\\.1$");
+        private readonly Regex RequestRegex = new Regex("^(?<method>GET|HEAD|POST|PUT|DELETE|TRACE|OPTIONS|CONNECT|PATCH)\\s(?<query_string>[^\\s]+)\\sHTTP/1\\.(0|1)$");
         private readonly Regex HeaderRegex = new Regex("^(?<name>[A-Za-z0-9_-]+): (?<value>.*)$");
 
         public struct RequestMetadata
@@ -169,7 +177,7 @@ namespace HTTP
         {
             public readonly Method Method;
             public readonly RequestMetadata Metadata;
-
+            
             public Request(Method Method, RequestMetadata Metadata)
             {
                 this.Method = Method;
@@ -204,10 +212,12 @@ namespace HTTP
             int headers_start_pos = 0;
             string query_string = null;
 
+            if (ClientSocket == null) throw new ArgumentException("ClientSocket null");
+
             while (total_read < buf.Length && !found_query)
             {
                 read = ClientSocket.Receive(buf, total_read, buf.Length - total_read, SocketFlags.None);
-
+                
                 if (read < 0)
                 {
                     WriteResponse(ClientSocket, null, RenderServerError(StatusCode.BAD_REQUEST));
@@ -445,7 +455,7 @@ namespace HTTP
                 request = ReadClientRequest(ClientSocket);
             } catch(Exception ex)
             {
-                ErrorLog(ex.Message);
+                ErrorLog(ex);
                 have_error = true;
             }
 
@@ -459,7 +469,7 @@ namespace HTTP
                     }
                     catch (Exception e)
                     {
-                    ErrorLog(e.Message);
+                        ErrorLog(e);
                         response = RenderServerError(StatusCode.INTERNAL_SERVER_ERROR);
                     }
 
@@ -488,8 +498,9 @@ namespace HTTP
 
                     Status = StatusType.RUNNING;
                 }
-                catch (Exception)
+                catch (Exception e)
                 {
+                    ErrorLog(e);
                     Status = StatusType.ERROR;
                     throw;
                 }
@@ -518,8 +529,9 @@ namespace HTTP
 
                     Status = StatusType.STOPPED;
                 }
-                catch (Exception)
+                catch (Exception e)
                 {
+                    ErrorLog(e);
                     Status = StatusType.ERROR;
                     throw;
                 }

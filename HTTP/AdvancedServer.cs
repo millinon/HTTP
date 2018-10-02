@@ -355,7 +355,7 @@ namespace HTTP
             }
             catch (Exception e)
             {
-                ErrorLog(e.Message);
+                ErrorLog(e);
                 return RenderServerError(StatusCode.BAD_REQUEST);
             }
 
@@ -399,6 +399,7 @@ namespace HTTP
 
             } catch(Exception e)
             {
+                ErrorLog(e);
                 response = RenderServerError(StatusCode.INTERNAL_SERVER_ERROR);
             }
 
@@ -454,12 +455,16 @@ namespace HTTP
 
         protected override void WriteResponse(Socket ClientSocket, BasicServer.Request Request, Response Response)
         {
+            if (Response.Headers == null) throw new ArgumentException("headers missing");
 
-            if (Response.Body != null && Response_Has_Body(Request.Method))
+            if (Response.Body != null)
             {
-                if (!Response.Headers.ContainsKey("Content-Length"))
+                if (Request == null || Response_Has_Body(Request.Method))
                 {
-                    Response.Headers["Content-Length"] = Response.Body.Length.ToString();
+                    if (!Response.Headers.ContainsKey("Content-Length"))
+                    {
+                        Response.Headers["Content-Length"] = Response.Body.Length.ToString();
+                    }
                 }
             }
 

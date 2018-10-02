@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 using System.Web.UI;
@@ -42,6 +43,12 @@ namespace FileServer
         public override void ErrorLog(string Message)
         {
             Console.WriteLine($"[{DateTime.UtcNow}] {Message}");
+        }
+
+        public override void ErrorLog(Exception Exception)
+        {
+            ErrorLog(Exception.Message);
+            ErrorLog(Exception.StackTrace);
         }
 
         private string sanitize_path(string Path)
@@ -141,7 +148,7 @@ namespace FileServer
                 {
                     html_writer.RenderBeginTag(HtmlTextWriterTag.Ul);
 
-                    html_writer.AddAttribute(HtmlTextWriterAttribute.Href, $"{Query_Path}{dir}/");
+                    html_writer.AddAttribute(HtmlTextWriterAttribute.Href, $"{Query_Path.TrimEnd('/')}/{dir}/");
                     html_writer.RenderBeginTag(HtmlTextWriterTag.A);
                     html_writer.Write($"{dir}/");
                     html_writer.RenderEndTag();
@@ -153,7 +160,7 @@ namespace FileServer
                 {
                     html_writer.RenderBeginTag(HtmlTextWriterTag.Ul);
 
-                    html_writer.AddAttribute(HtmlTextWriterAttribute.Href, $"{Query_Path}{file}");
+                    html_writer.AddAttribute(HtmlTextWriterAttribute.Href, $"{Query_Path.TrimEnd('/')}/{file}");
                     html_writer.RenderBeginTag(HtmlTextWriterTag.A);
                     html_writer.Write(file);
                     html_writer.RenderEndTag();
