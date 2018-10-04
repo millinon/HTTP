@@ -109,7 +109,7 @@ namespace FileServer
                     html_writer.RenderEndTag();
                 }
 
-                return str_writer.ToString();
+                return $"<!DOCTYPE html>\n{str_writer.ToString()}";
             }
         }
 

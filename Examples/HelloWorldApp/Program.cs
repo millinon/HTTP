@@ -29,7 +29,23 @@ namespace HelloWorldApp
             Router.GET("/", (r => render_plaintext("Hello, world!")));
             Router.GET("/test", (r => render_plaintext("test successful")));
             Router.GET("/name/$name", (r, vars) => render_plaintext($"hello, {vars["name"]}!"));
-            
+            Router.GET("/doublename/$name", (r, vars) => render_plaintext($"{vars["name"]}{vars["name"]}"));
+
+            Router.HEAD("/", (r => render_plaintext("Hello, world!")));
+            Router.HEAD("/test", (r => render_plaintext("test successful")));
+            Router.HEAD("/name/$name", (r, vars) => render_plaintext($"hello, {vars["name"]}!"));
+            Router.HEAD("/doublename/$name", (r, vars) => render_plaintext($"{vars["name"]}{vars["name"]}"));
+
+            var assetsdir = Path.Combine(Directory.GetCurrentDirectory(), "assets");
+
+            if (Directory.Exists(assetsdir)) AssetServer.Register(assetsdir, Router, "/assets", true);
+
+            Console.WriteLine("routes:");
+            foreach(var route in Router.Routes)
+            {
+                Console.WriteLine($"  {route}");
+            }
+
             //Router.GET("/foo/$bar/baz/$bar", r => render_plaintext("this shouldn't work!"));
         }
 

@@ -15,6 +15,7 @@ namespace WebApp
         protected readonly RouterCollection Router;
         private readonly Server Server;
         public readonly string Name;
+        protected readonly AssetServer AssetServer;
 
         private BasicServer.Response Redirect(string URL, bool Permanent = false)
         {
@@ -34,6 +35,7 @@ namespace WebApp
             Router = new RouterCollection();
 
             Server = new Server(this, Endpoint, AcceptedMethods, Path.Combine(LogDir, "error.log"), Path.Combine(LogDir, "access.log"));
+            AssetServer = new AssetServer(this);
         }
 
         public BasicServer.Response Route(AdvancedServer.Request Request)

@@ -6,7 +6,6 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Globalization;
 
 namespace HTTP
 {
@@ -216,8 +215,16 @@ namespace HTTP
 
             while (total_read < buf.Length && !found_query)
             {
-                read = ClientSocket.Receive(buf, total_read, buf.Length - total_read, SocketFlags.None);
-                
+                try
+                {
+                    read = ClientSocket.Receive(buf, total_read, buf.Length - total_read, SocketFlags.None);
+                } catch(Exception e)
+                {
+                    ErrorLog($"Receive failed: {e.Message}");
+                    ClientSocket.Close();
+                    throw;
+                }
+
                 if (read < 0)
                 {
                     WriteResponse(ClientSocket, null, RenderServerError(StatusCode.BAD_REQUEST));
@@ -273,9 +280,7 @@ namespace HTTP
                     var method = match.Groups["method"].Value;
                     query_string = match.Groups["query_string"].Value;
 
-                    Method requested_method;
-
-                    if (!Enum.TryParse(method, out requested_method))
+                    if (!Enum.TryParse(method, out Method requested_method))
                     {
                         WriteResponse(ClientSocket, null, RenderServerError(StatusCode.BAD_REQUEST));
                         throw new Exception("Invalid HTTP method");
@@ -283,7 +288,7 @@ namespace HTTP
                     else if (!AcceptedMethods.Contains(requested_method))
                     {
                         WriteResponse(ClientSocket, null, RenderServerError(StatusCode.BAD_REQUEST));
-                        throw new Exception("Invalid HTTP method");
+                        throw new Exception("Unsupported HTTP method");
                     }
                     else
                     {
@@ -379,7 +384,7 @@ namespace HTTP
                                 headers[match.Groups["name"].Value] = match.Groups["value"].Value;
                             }
                         }
-                        
+
                         Request request;
 
                         var metadata = new RequestMetadata()
@@ -393,7 +398,7 @@ namespace HTTP
 
                         if (Request_Must_Have_Body(requested_method))
                         {
-                            if (! headers.ContainsKey("Content-Length"))
+                            if (!headers.ContainsKey("Content-Length"))
                             {
                                 WriteResponse(ClientSocket, null, RenderServerError(StatusCode.BAD_REQUEST));
                                 throw new Exception("Content-Length header missing");

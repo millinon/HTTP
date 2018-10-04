@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 using HTTP;
 
@@ -17,11 +15,14 @@ namespace WebApp
         private Func<AdvancedServer.Request, Dictionary<string, string>, BasicServer.Response> Handler;
         private readonly bool IsVar;
         public readonly string VarKey;
-        private readonly Router Root;
+        private readonly Router Parent;
 
-        public bool HaveVarKey(string key)
+        public bool HaveVarKey(string Key)
         {
-            return VarChildren.Keys.Select(k => k.TrimStart('$')).Contains(key) || VarChildren.Values.Where(child => child.HaveVarKey(key)).Any() || Children.Values.Where(child => child.HaveVarKey(key)).Any();
+            var key = Key.TrimStart('$');
+
+            if (Parent == null) return VarChildren.ContainsKey(key);
+            else return VarChildren.ContainsKey(key) || Parent.HaveVarKey(key);
         }
 
         public bool IsTerminal
@@ -39,20 +40,32 @@ namespace WebApp
         {
             get
             {
-                IEnumerable<string> routes;
-                if (IsTerminal) routes = new List<string>() { Path };
-                else routes = new List<string>();
+                var routes = new List<string>();
 
-                routes = routes.Concat(Children.Values.Select(child => child.Path));
-                routes = routes.Concat(VarChildren.Values.Select(child => child.Path));
+                if (IsTerminal) routes.Add(Path);
+
+                foreach (var child in Children.Values)
+                {
+                    foreach (var route in child.Routes)
+                    {
+                        routes.Add(route);
+                    }
+                }
+
+                foreach (var child in VarChildren.Values)
+                {
+                    foreach (var route in child.Routes)
+                    {
+                        routes.Add(route);
+                    }
+                }
 
                 return routes;
             }
         }
 
-        private Router(string Path, Router Root, string VarKey)
+        private Router(string Path, Router Parent, string VarKey)
         {
-
             this.Path = Path;
 
             Children = new Dictionary<string, Router>();
@@ -60,17 +73,17 @@ namespace WebApp
 
             Handler = null;
 
-            this.Root = (Root == null ? this : Root);
+            this.Parent = Parent;
 
             this.VarKey = VarKey;
             this.IsVar = (VarKey == null);
         }
 
-        public Router(string Path = "/", Router Root = null) : this(Path, Root, null)
+        public Router(string Path = "/", Router Parent = null) : this(Path, Parent, null)
         {
         }
         
-        public Router(string Path, string VarKey, Router Root = null) : this(Path, Root, VarKey)
+        public Router(string Path, string VarKey, Router Parent) : this(Path, Parent, VarKey)
         {
         }
 
@@ -98,12 +111,13 @@ namespace WebApp
                     {
                         var varkey = next.TrimStart('$');
 
-                        if (Root.HaveVarKey(varkey))
+                        if (HaveVarKey(varkey))
                         {
                             throw new ArgumentException($"Duplicate var key detected: {varkey}");
                         }
 
-                        VarChildren[next] = new Router($"{Path.TrimStart('/')}/{next}", varkey, Root);
+                        if (Path == "/") VarChildren[next] = new Router($"/{next}", varkey, this);
+                        else VarChildren[next] = new Router($"{Path}/{next}", varkey, this);
                     }
 
                     return VarChildren[next].AddRoute(remaining, Handler);
@@ -111,7 +125,8 @@ namespace WebApp
                 {
                     if (!Children.ContainsKey(next))
                     {
-                        Children[next] = new Router($"{Path.TrimStart('/')}/{next}", next, Root);
+                        if (Path == "/") Children[next] = new Router($"/{next}", next, this);
+                        else Children[next] = new Router($"{Path}/{next}", next, this);
                     }
 
                     return Children[next].AddRoute(remaining, Handler);
@@ -213,12 +228,13 @@ namespace WebApp
 
                     if(!VarChildren.ContainsKey(next))
                     {
-                        if (Root.HaveVarKey(varkey))
+                        if (HaveVarKey(varkey))
                         {
                             throw new ArgumentException($"Duplicate var key detected: {varkey}");
                         }
 
-                        VarChildren[next] = new Router($"{Path.TrimStart('/')}/{next}", varkey, Root);
+                        if(Path == "/") VarChildren[next] = new Router($"/{next}", varkey, this);
+                        else VarChildren[next] = new Router($"{Path}/{next}", varkey, this);
                     }
                     
                     return VarChildren[next].Lookup(remaining);
@@ -227,7 +243,8 @@ namespace WebApp
                 {
                     if(!Children.ContainsKey(next))
                     {
-                        Children[next] = new Router($"{Path.TrimStart('/')}/{next}", Root);
+                        if (Path == "/") Children[next] = new Router($"/{next}", this);
+                        else Children[next] = new Router($"{Path}/{next}", this);
                     }
 
                     return Children[next];

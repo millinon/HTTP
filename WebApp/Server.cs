@@ -1,10 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Net;
-using System.Text;
-using System.Threading.Tasks;
 
 using HTTP;
 
@@ -41,8 +38,12 @@ namespace WebApp
 
         public override void ErrorLog(string Message)
         {
-            ErrorLogStream.WriteLine($"[{DateTime.UtcNow}] {Message}");
-            ErrorLogStream.Flush();
+            try
+            {
+                ErrorLogStream.WriteLine($"[{DateTime.UtcNow}] {Message}");
+                ErrorLogStream.Flush();
+            }
+            catch (Exception) { }
         }
         
         protected override void Dispose(bool disposing)
