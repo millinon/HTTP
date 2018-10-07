@@ -30,9 +30,9 @@ namespace WebApp
             };
         }
 
-        public Application(string Name, IPEndPoint Endpoint, IEnumerable<Method> AcceptedMethods, string LogDir)
+        public Application(string Name, IPEndPoint Endpoint, IEnumerable<Method> AcceptedMethods, string LogDir, string URLPrefix = "")
         {
-            Router = new RouterCollection();
+            Router = new RouterCollection(URLPrefix);
 
             Server = new Server(this, Endpoint, AcceptedMethods, Path.Combine(LogDir, "error.log"), Path.Combine(LogDir, "access.log"));
             AssetServer = new AssetServer(this);

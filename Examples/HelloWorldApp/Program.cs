@@ -10,13 +10,15 @@ namespace HelloWorldApp
 {
     class HelloWorld : Application
     {
-        public HelloWorld() : base("HelloWorld", new IPEndPoint(IPAddress.Parse("0.0.0.0"), 8080), new Method[] { Method.GET, Method.HEAD }, Path.Combine(Directory.GetCurrentDirectory(), "log"))
+        protected readonly TemplateEngine Views;
+
+        public HelloWorld() : base("HelloWorld", new IPEndPoint(IPAddress.Parse("0.0.0.0"), 8080), new Method[] { Method.GET, Method.HEAD }, Path.Combine(Directory.GetCurrentDirectory(), "log"), "/HTTP")
         {
-            BasicServer.Response render_plaintext(string text)
+            BasicServer.Response render(string text, string ct = "text/plain")
             {
                 var headers = BasicServer.DefaultHeaders();
 
-                headers["Content-Type"] = "text/plain";
+                headers["Content-Type"] = ct;
 
                 return new BasicServer.Response()
                 {
@@ -26,27 +28,37 @@ namespace HelloWorldApp
                 };
             }
 
-            Router.GET("/", (r => render_plaintext("Hello, world!")));
-            Router.GET("/test", (r => render_plaintext("test successful")));
-            Router.GET("/name/$name", (r, vars) => render_plaintext($"hello, {vars["name"]}!"));
-            Router.GET("/doublename/$name", (r, vars) => render_plaintext($"{vars["name"]}{vars["name"]}"));
+            Router.GET("/", (r => render("Hello, world!")));
+            Router.GET("/test", (r => render("test successful")));
+            Router.GET("/name/$name", (r, vars) => render($"hello, {vars["name"]}!"));
+            Router.GET("/doublename/$name", (r, vars) => render($"{vars["name"]}{vars["name"]}"));
 
-            Router.HEAD("/", (r => render_plaintext("Hello, world!")));
-            Router.HEAD("/test", (r => render_plaintext("test successful")));
-            Router.HEAD("/name/$name", (r, vars) => render_plaintext($"hello, {vars["name"]}!"));
-            Router.HEAD("/doublename/$name", (r, vars) => render_plaintext($"{vars["name"]}{vars["name"]}"));
+            Router.HEAD("/", (r => render("Hello, world!")));
+            Router.HEAD("/test", (r => render("test successful")));
+            Router.HEAD("/name/$name", (r, vars) => render($"hello, {vars["name"]}!"));
+            Router.HEAD("/doublename/$name", (r, vars) => render($"{vars["name"]}{vars["name"]}"));
 
             var assetsdir = Path.Combine(Directory.GetCurrentDirectory(), "assets");
 
             if (Directory.Exists(assetsdir)) AssetServer.Register(assetsdir, Router, "/assets", true);
 
+            //Router.GET("/foo/$bar/baz/$bar", r => render_plaintext("this shouldn't work!"));*
+
+            var viewsdir = Path.Combine(Directory.GetCurrentDirectory(), "views");
+
+            if (Directory.Exists(viewsdir))
+            {
+                Views = new TemplateEngine(viewsdir);
+
+                var name_template = Views.Load("name.html.template");
+                Router.GET("/rendername/$name", (r, vars) => render(name_template.With(vars), "text/html"));
+            }
+               
             Console.WriteLine("routes:");
-            foreach(var route in Router.Routes)
+            foreach (var route in Router.Routes)
             {
                 Console.WriteLine($"  {route}");
             }
-
-            //Router.GET("/foo/$bar/baz/$bar", r => render_plaintext("this shouldn't work!"));
         }
 
         static void Main(string[] args)

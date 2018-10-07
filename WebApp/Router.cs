@@ -174,7 +174,7 @@ namespace WebApp
                     {
                         var matching_router = matches.First();
 
-                        newvars[matching_router.VarKey] = next;
+                        newvars[matching_router.VarKey] = Uri.UnescapeDataString(next);
 
                         return matching_router.Match(remaining, newvars);
                     }
@@ -257,6 +257,7 @@ namespace WebApp
 
     public class RouterCollection
     {
+        private readonly string URLPrefix;
         private readonly Dictionary<Method, Router> RootRouters;
 
         public IEnumerable<string> Routes
@@ -274,8 +275,9 @@ namespace WebApp
             }
         }
 
-        public RouterCollection()
+        public RouterCollection(string URLPrefix = "")
         {
+            this.URLPrefix = URLPrefix;
             RootRouters = new Dictionary<Method, Router>();
         }
 
@@ -308,7 +310,7 @@ namespace WebApp
                 RootRouters[Method] = new Router();
             }
 
-            return RootRouters[Method].AddRoute(Path, Handler);
+            return RootRouters[Method].AddRoute($"{URLPrefix}{Path}", Handler);
         }
 
         public Router Lookup(Method Method, string Path)
@@ -318,7 +320,7 @@ namespace WebApp
                 RootRouters[Method] = new Router();
             }
 
-            return RootRouters[Method].Lookup(Path);
+            return RootRouters[Method].Lookup($"{URLPrefix}{Path}");
         }
 
         public Router GET(string Path) => Lookup(Method.GET, Path);

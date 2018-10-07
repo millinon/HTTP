@@ -46,6 +46,7 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Router.cs" />
     <Compile Include="Server.cs" />
+    <Compile Include="TemplateEngine.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\HTTP\HTTP.csproj">
