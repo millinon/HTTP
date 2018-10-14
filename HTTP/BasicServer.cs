@@ -83,7 +83,11 @@ namespace HTTP
         public abstract void AccessLog(Request Request);
         public abstract void ErrorLog(string Message);
 
-        public virtual void ErrorLog(Exception Exception) => ErrorLog(Exception.Message);
+        public virtual void ErrorLog(Exception Exception)
+        {
+            ErrorLog($"{Exception}");
+            ErrorLog($"{Exception.StackTrace}");
+        }
 
         public BasicServer(IPEndPoint Endpoint, IEnumerable<Method> AcceptedMethods)
         {

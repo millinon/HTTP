@@ -29,7 +29,7 @@ namespace FileServer
 
         private string base_dir;
 
-    public FileServer(string base_dir) : base(new IPEndPoint(IPAddress.Parse("0.0.0.0"), 8080), new Method[] { Method.GET, Method.HEAD })
+        public FileServer(string base_dir) : base(new IPEndPoint(IPAddress.Parse("0.0.0.0"), 8080), new Method[] { Method.GET, Method.HEAD })
         {
             this.base_dir = base_dir;
             Console.WriteLine($"serving files in {base_dir}...");
@@ -57,13 +57,14 @@ namespace FileServer
 
             var toks = Path.Split('/');
 
-            foreach(var tok in Path.Split('/'))
+            foreach (var tok in Path.Split('/'))
             {
-                if(tok == "..")
+                if (tok == "..")
                 {
                     if (path_stack.Count() == 0) throw new Exception("shenanigans detected");
                     else path_stack.Pop();
-                } else if(tok != ".")
+                }
+                else if (tok != ".")
                 {
                     path_stack.Push(tok);
                 }
@@ -143,8 +144,8 @@ namespace FileServer
                 }
 
                 var dirinfo = new DirectoryInfo(Sanitized_Directory_Path);
-                
-                foreach(var dir in dirinfo.GetDirectories().Select(subdir => subdir.Name))
+
+                foreach (var dir in dirinfo.GetDirectories().Select(subdir => subdir.Name))
                 {
                     html_writer.RenderBeginTag(HtmlTextWriterTag.Ul);
 
@@ -156,7 +157,7 @@ namespace FileServer
                     html_writer.RenderEndTag();
                 }
 
-                foreach(var file in dirinfo.GetFiles().Select(file => file.Name))
+                foreach (var file in dirinfo.GetFiles().Select(file => file.Name))
                 {
                     html_writer.RenderBeginTag(HtmlTextWriterTag.Ul);
 
@@ -187,7 +188,7 @@ namespace FileServer
             void render_body(HtmlTextWriter html_writer)
             {
                 html_writer.RenderBeginTag(HtmlTextWriterTag.H1);
-                html_writer.Write($"{(int) Status} {Status.ToFriendlyString()}");
+                html_writer.Write($"{(int)Status} {Status.ToFriendlyString()}");
                 html_writer.RenderEndTag();
             }
 
@@ -246,7 +247,8 @@ namespace FileServer
                         Headers = headers,
                         Status = StatusCode.OK,
                     };
-                } else
+                }
+                else
                 {
                     return ListDirectory(Request.Query.Path, sanitized_path);
                 }

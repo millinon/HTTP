@@ -130,11 +130,19 @@ namespace HTTP
 
         public static StandardRequestHeaders ParseRequestHeaders(IReadOnlyDictionary<string, string> RawHeaders)
         {
+            Dictionary<string, string> keys_by_case = new Dictionary<string, string>();
+            foreach(var key in RawHeaders.Keys)
+            {
+                keys_by_case[key.ToLower()] = key;
+            }
+
             Option<T> parse<T>(string key, Func<string, T> parsefunc)
             {
-                if (RawHeaders.ContainsKey(key))
+                var lower_key = key.ToLower();
+             //   if (RawHeaders.ContainsKey(key))
+                if(keys_by_case.ContainsKey(lower_key))
                 {
-                    return Option<T>.Some(parsefunc(RawHeaders[key]));
+                    return Option<T>.Some(parsefunc(RawHeaders[keys_by_case[lower_key]]));
                 }
                 else
                 {
@@ -227,7 +235,6 @@ namespace HTTP
 
             public readonly Query Query;
             public readonly StandardRequestHeaders Headers;
-
 
             public Request(BasicServer.Request Raw, StandardRequestHeaders Headers)
             {

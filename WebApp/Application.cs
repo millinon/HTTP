@@ -13,11 +13,12 @@ namespace WebApp
     public abstract class Application : IDisposable
     {
         protected readonly RouterCollection Router;
-        private readonly Server Server;
+        protected readonly Server Server;
         public readonly string Name;
         protected readonly AssetServer AssetServer;
+        public readonly string URLPrefix;
 
-        private BasicServer.Response Redirect(string URL, bool Permanent = false)
+        protected BasicServer.Response Redirect(string URL, bool Permanent = false)
         {
             var headers = Server.DefaultHeaders();
 
@@ -30,12 +31,14 @@ namespace WebApp
             };
         }
 
-        public Application(string Name, IPEndPoint Endpoint, IEnumerable<Method> AcceptedMethods, string LogDir, string URLPrefix = "")
+        public Application(string Name, IPEndPoint Endpoint, IEnumerable<Method> AcceptedMethods, string LogDir, string URLPrefix = "/")
         {
             Router = new RouterCollection(URLPrefix);
 
             Server = new Server(this, Endpoint, AcceptedMethods, Path.Combine(LogDir, "error.log"), Path.Combine(LogDir, "access.log"));
             AssetServer = new AssetServer(this);
+
+            this.URLPrefix = URLPrefix;
         }
 
         public BasicServer.Response Route(AdvancedServer.Request Request)
@@ -49,7 +52,7 @@ namespace WebApp
             }
         }
 
-        public virtual BasicServer.Response DefaultResponse(AdvancedServer.Request Request) => Redirect("/");
+        public virtual BasicServer.Response DefaultResponse(AdvancedServer.Request Request) => Redirect(URLPrefix);
 
         public void Start()
         {
@@ -81,9 +84,5 @@ namespace WebApp
             Dispose(true);
         }
         #endregion
-
-
-
-
     }
 }

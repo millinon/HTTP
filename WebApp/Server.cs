@@ -7,7 +7,7 @@ using HTTP;
 
 namespace WebApp
 {
-    class Server : AdvancedServer
+    public class Server : AdvancedServer
     {
         private readonly StreamWriter ErrorLogStream;
         private readonly StreamWriter AccessLogStream;
